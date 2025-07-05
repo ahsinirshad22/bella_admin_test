@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:untitled1/models/menu_item.dart';
@@ -20,6 +21,7 @@ class _MenuActionsScreenState extends State<MenuActionsScreen> {
   final _urlController = TextEditingController();
   Future<List<String>>? _imageUrlsFuture;
   bool _isUpdating = false;
+  double? _downloadProgress;
 
   @override
   void initState() {
@@ -58,13 +60,39 @@ class _MenuActionsScreenState extends State<MenuActionsScreen> {
       return;
     }
 
-    setState(() => _isUpdating = true);
+    setState(() {
+      _isUpdating = true;
+      _downloadProgress = 0.0;
+    });
+
     try {
-      // A CORS proxy is still needed to download image bytes from the web.
       final proxyUrl = 'https://corsproxy.io/?${Uri.encodeComponent(imageUrl)}';
-      final response = await http.get(Uri.parse(proxyUrl));
+      final client = http.Client();
+      final request = http.Request('GET', Uri.parse(proxyUrl));
+      final response = await client.send(request);
+
       if (response.statusCode == 200) {
-        final imageBytes = response.bodyBytes;
+        final totalBytes = response.contentLength;
+        List<int> bytes = [];
+        int receivedBytes = 0;
+
+        await for (var chunk in response.stream) {
+          bytes.addAll(chunk);
+          receivedBytes += chunk.length;
+          if (totalBytes != null) {
+            setState(() {
+              _downloadProgress = receivedBytes / totalBytes;
+            });
+          } else {
+            if (_downloadProgress != null) {
+              setState(() => _downloadProgress = null);
+            }
+          }
+        }
+
+        setState(() => _downloadProgress = null);
+
+        final imageBytes = Uint8List.fromList(bytes);
         final result = await _apiService.updateMenuFromBytes(
           widget.menuItem.id.toString(),
           imageBytes,
@@ -75,7 +103,7 @@ class _MenuActionsScreenState extends State<MenuActionsScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Menu item updated successfully!')),
           );
-          Navigator.of(context).pop(true); // Pop with 'true' to signal a refresh
+          Navigator.of(context).pop(true);
         } else {
           throw Exception('Failed to update: ${result['message']}');
         }
@@ -85,8 +113,12 @@ class _MenuActionsScreenState extends State<MenuActionsScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
+
     if (mounted) {
-      setState(() => _isUpdating = false);
+      setState(() {
+        _isUpdating = false;
+        _downloadProgress = null;
+      });
     }
   }
 
@@ -158,6 +190,25 @@ class _MenuActionsScreenState extends State<MenuActionsScreen> {
                     onPressed: () => _downloadAndUploadImage(_urlController.text),
                   ),
                 ),
+                if (_isUpdating)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _downloadProgress != null
+                              ? 'Downloading... ${(_downloadProgress! * 100).toStringAsFixed(0)}%'
+                              : 'Uploading...',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 4),
+                        LinearProgressIndicator(
+                          value: _downloadProgress,
+                        ),
+                      ],
+                    ),
+                  ),
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: 16),
