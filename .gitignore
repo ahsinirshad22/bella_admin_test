@@ -31,7 +31,11 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/
+
+# Allow the web build directory to be tracked.
+# This is useful for deploying to services like GitHub Pages.
+build/*
+!build/web
 
 # Symbolication related
 app.*.symbols
