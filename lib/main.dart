@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:untitled1/screens/login_screen.dart';
-import 'package:untitled1/screens/menu_update_screen.dart';
+import 'package:untitled1/screens/menu_list_screen.dart';
 import 'package:untitled1/services/storage_service.dart';
 
 void main() {
@@ -38,18 +38,12 @@ class _AuthCheckerState extends State<AuthChecker> {
       future: _storageService.getToken(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
-
         if (snapshot.hasData && snapshot.data != null) {
-          return const MenuUpdateScreen();
-        } else {
-          return const LoginScreen();
+          return const MenuListScreen();
         }
+        return const LoginScreen();
       },
     );
   }

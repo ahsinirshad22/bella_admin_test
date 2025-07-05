@@ -6,9 +6,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:untitled1/services/api_service.dart';
 import 'package:untitled1/services/storage_service.dart';
 import 'package:untitled1/screens/login_screen.dart';
+import 'package:untitled1/screens/auto_update_screen.dart';
+import 'package:untitled1/screens/menu_list_screen.dart';
+import 'package:untitled1/widgets/cross_platform_image.dart';
 
 class MenuUpdateScreen extends StatefulWidget {
-  const MenuUpdateScreen({super.key});
+  final String? menuId;
+  const MenuUpdateScreen({super.key, this.menuId});
 
   @override
   State<MenuUpdateScreen> createState() => _MenuUpdateScreenState();
@@ -21,6 +25,14 @@ class _MenuUpdateScreenState extends State<MenuUpdateScreen> {
   final _imagePicker = ImagePicker();
   XFile? _imageFile;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.menuId != null) {
+      _menuIdController.text = widget.menuId!;
+    }
+  }
 
   void _pickImage() async {
     final pickedFile = await _imagePicker.pickImage(source: ImageSource.gallery);
@@ -80,6 +92,24 @@ class _MenuUpdateScreenState extends State<MenuUpdateScreen> {
         title: const Text('Update Menu'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.list_alt),
+            tooltip: 'Menu Browser',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const MenuListScreen()),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.auto_awesome),
+            tooltip: 'Auto-Update All',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const AutoUpdateScreen()),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.logout),
             onPressed: _logout,
           ),
@@ -97,10 +127,8 @@ class _MenuUpdateScreenState extends State<MenuUpdateScreen> {
             const SizedBox(height: 16),
             _imageFile == null
                 ? const Text('No image selected.')
-                : kIsWeb
-                    ? Image.network(_imageFile!.path, height: 200)
-                    : Image.file(File(_imageFile!.path), height: 200),
-            const SizedBox(height: 16),
+                : CrossPlatformImage(url: _imageFile!.path, height: 400),
+            const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _pickImage,
               child: const Text('Pick Image'),
