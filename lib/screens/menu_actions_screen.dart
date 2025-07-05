@@ -16,14 +16,32 @@ class MenuActionsScreen extends StatefulWidget {
 
 class _MenuActionsScreenState extends State<MenuActionsScreen> {
   final ApiService _apiService = ApiService();
-  late Future<List<String>> _imageUrlsFuture;
+  final _searchController = TextEditingController();
+  final _urlController = TextEditingController();
+  Future<List<String>>? _imageUrlsFuture;
   bool _isUpdating = false;
 
   @override
   void initState() {
     super.initState();
-    final query = '${widget.menuItem.title} ${widget.menuItem.description}';
-    _imageUrlsFuture = _apiService.searchPexelsImages(query, 6);
+    _searchController.text = widget.menuItem.title;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _urlController.dispose();
+    super.dispose();
+  }
+
+  void _searchImages() {
+    if (_searchController.text.trim().isEmpty) return;
+    setState(() {
+      _imageUrlsFuture = _apiService.searchPexelsImages(
+        _searchController.text.trim(),
+        6,
+      );
+    });
   }
 
   void _navigateToManualUpdate() {
@@ -32,10 +50,17 @@ class _MenuActionsScreenState extends State<MenuActionsScreen> {
     ));
   }
 
-  Future<void> _updateImage(String imageUrl) async {
+  Future<void> _downloadAndUploadImage(String imageUrl) async {
+    if (imageUrl.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid URL.')),
+      );
+      return;
+    }
+
     setState(() => _isUpdating = true);
     try {
-      // A CORS proxy is still needed to download image bytes from Pexels on the web.
+      // A CORS proxy is still needed to download image bytes from the web.
       final proxyUrl = 'https://corsproxy.io/?${Uri.encodeComponent(imageUrl)}';
       final response = await http.get(Uri.parse(proxyUrl));
       if (response.statusCode == 200) {
@@ -70,100 +95,165 @@ class _MenuActionsScreenState extends State<MenuActionsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.menuItem.title),
+        actions: [
+          if (_isUpdating)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+              ),
+            ),
+        ],
       ),
       body: AbsorbPointer(
         absorbing: _isUpdating,
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '[ID: ${widget.menuItem.id}] ${widget.menuItem.title}',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(widget.menuItem.description),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.edit),
-                      label: const Text('Update Manually'),
-                      onPressed: _navigateToManualUpdate,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        textStyle: const TextStyle(fontSize: 16),
-                      ),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '[ID: ${widget.menuItem.id}] ${widget.menuItem.title}',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+                Text(widget.menuItem.description),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.edit),
+                    label: const Text('Update Manually'),
+                    onPressed: _navigateToManualUpdate,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      textStyle: const TextStyle(fontSize: 16),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Or select a suggestion from Pexels:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: FutureBuilder<List<String>>(
-                      future: _imageUrlsFuture,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-                          return Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Text(
-                                'Could not load suggested images from Pexels. Please use the manual update option.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.red.shade700),
-                              ),
-                            ),
-                          );
-                        }
-                        final imageUrls = snapshot.data!;
-                        return GridView.builder(
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 8.0,
-                            mainAxisSpacing: 8.0,
-                          ),
-                          itemCount: imageUrls.length,
-                          itemBuilder: (context, index) {
-                            final url = imageUrls[index];
-                            return GestureDetector(
-                              onTap: () => _updateImage(url),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8.0),
-                                child: CrossPlatformImage(url: url),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (_isUpdating)
-              Container(
-                color: Colors.black.withOpacity(0.5),
-                child: const Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(),
-                      SizedBox(height: 16),
-                      Text('Updating...', style: TextStyle(color: Colors.white)),
-                    ],
                   ),
                 ),
-              ),
-          ],
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 16),
+                const Text(
+                  'Or update from URL:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _urlController,
+                  decoration: const InputDecoration(
+                    labelText: 'Image URL',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.cloud_upload_outlined),
+                    label: const Text('Update from URL'),
+                    onPressed: () => _downloadAndUploadImage(_urlController.text),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 16),
+                const Text(
+                  'Or search for a suggestion on Pexels:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: const InputDecoration(
+                          labelText: 'Image Search Query',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12.0,
+                            vertical: 8.0,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filled(
+                      icon: const Icon(Icons.search),
+                      onPressed: _searchImages,
+                      tooltip: 'Search',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                FutureBuilder<List<String>>(
+                  future: _imageUrlsFuture,
+                  builder: (context, snapshot) {
+                    if (_imageUrlsFuture == null) {
+                      return const Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 48.0),
+                          child: Text(
+                            'Press the search button to find images.',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      );
+                    }
+
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                          child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 48.0),
+                        child: CircularProgressIndicator(),
+                      ));
+                    }
+
+                    if (snapshot.hasError ||
+                        !snapshot.hasData ||
+                        snapshot.data!.isEmpty) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Text(
+                            'Could not load suggested images. Please try a different search term or use one of the manual update options.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.red.shade700),
+                          ),
+                        ),
+                      );
+                    }
+                    final imageUrls = snapshot.data!;
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 8.0,
+                        mainAxisSpacing: 8.0,
+                      ),
+                      itemCount: imageUrls.length,
+                      itemBuilder: (context, index) {
+                        final url = imageUrls[index];
+                        return GestureDetector(
+                          onTap: () => _downloadAndUploadImage(url),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8.0),
+                            child: CrossPlatformImage(url: url),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
